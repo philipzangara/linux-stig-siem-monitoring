@@ -1,0 +1,158 @@
+<dashboard version="1.1" theme="dark">
+  <label>Linux Security Monitoring Dashboard — Ubuntu 24.04 STIG Hardened</label>
+  <row>
+    <panel>
+      <title>T1110 — Brute Force: Failed SSH Login Attempts</title>
+      <chart>
+        <search>
+          <query>index=pci_compliance sourcetype=linux_secure "Failed password" | timechart span=1h count as "Failed Logins"</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.axisTitleX.text">Date</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.fieldColors">{"Failed Logins": 0xD55E00}</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>T1548.003 — Sudo and Sudo Caching: Privilege Escalation Events</title>
+      <table>
+        <search>
+          <query>index=pci_compliance sourcetype=linux_audit type=USER_CMD 
+                  | rex field=_raw "UID=\"(?P&lt;user&gt;[^\"]+)\"" 
+                  | rex field=_raw "cmd=(?P&lt;cmd_hex&gt;[0-9A-Fa-f]+)" 
+                  | eval command=urldecode(replace(cmd_hex,"([0-9A-Fa-f]{2})","%\1")) 
+                  | eval readable_time=strftime(_time,"%Y-%m-%d %H:%M:%S")
+                  | table readable_time, host, user, command 
+                  | sort -readable_time 
+                  | head 20
+                  | rename readable_time as "Time", host as "Host", user as "User", command as "Command"
+          </query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>T1562.006 — Log Source Heartbeat: Indicator Removal on Host</title>
+      <chart>
+        <search>
+          <query>index=pci_compliance host=ubuntu-openscap | timechart span=1h count by sourcetype</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.axisTitleX.text">Date</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>T1078 — Valid Accounts: Authentication Success vs Failure</title>
+      <chart>
+        <search>
+          <query>index=pci_compliance sourcetype=linux_secure ("Accepted password" OR "Accepted publickey" OR "Failed password") 
+                  | eval result=if(match(_raw,"Failed"),"Failure","Success") 
+                  | timechart span=1h count by result
+          </query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.fieldColors">{"Failure": 0xD55E00, "Success": 0x0072B2}</option>
+        <option name="charting.axisTitleX.text">Date</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>T1046 — Network Service Discovery: UFW Blocked Connections</title>
+      <table>
+        <search>
+          <query>index=pci_compliance sourcetype=ufw "UFW BLOCK" 
+                  | rex field=_raw "DPT=(?P&lt;dest_port&gt;\d+)" 
+                  | rex field=_raw "SRC=(?P&lt;src_ip&gt;[\d.]+)" 
+                  | stats count by dest_port, src_ip 
+                  | sort -count 
+                  | rename dest_port as "Destination Port", src_ip as "Source IP" 
+                  | head 10
+          </query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+    <panel>
+      <title>T1543 — Create or Modify System Process: File Integrity Changes</title>
+      <table>
+        <search>
+          <query>index=pci_compliance sourcetype=linux_audit type=PATH earliest=0
+                  | rex field=_raw "name=\"(?P&lt;filepath&gt;[^\"]+)\""
+                  | rex field=_raw "nametype=(?P&lt;nametype&gt;\w+)"
+                  | search nametype=NORMAL OR nametype=CREATE OR nametype=DELETE
+                  | search filepath="/etc/*"
+                  | eval action=case(
+                      nametype="CREATE","File Created",
+                      nametype="DELETE","File Deleted",
+                      nametype="NORMAL","File Accessed",
+                      1=1,"Unknown")
+                  | eval readable_time=strftime(_time,"%Y-%m-%d %H:%M:%S")
+                  | table readable_time, host, action, filepath
+                  | sort - readable_time
+                  | head 20
+                  | rename readable_time as "Time", host as "Host", action as "Action", filepath as "File Path"
+          </query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>T1070 — Indicator Removal: Time Sync Integrity (Chrony)</title>
+      <table>
+        <search>
+          <query>index=pci_compliance sourcetype=syslog "chronyd[" 
+                  | rex field=_raw "chronyd\[\d+\]: (?P&lt;chrony_event&gt;.+)" 
+                  | search chrony_event!="" 
+                  | table _time, host, chrony_event 
+                  | sort - _time 
+                  | head 10
+                  | rename time as "Time", host as "Host", chrony_event as "Chrony Event"</query>
+          <earliest>-30d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+    <panel>
+      <title>STIG V1R1 Compliance Score Trend</title>
+      <table>
+        <search>
+          <query>index=pci_compliance sourcetype=openscap_score earliest=0 
+                  | rex field=_raw "compliance_score=(?P&lt;score&gt;[\d.]+)" 
+                  | rex field=_raw "scan=(?P&lt;scan_type&gt;\S+)" 
+                  | where isnotnull(score) AND score!="" 
+                  | eval score_pct=round(tonumber(score),2)."%" 
+                  | dedup scan_type sortby -_time 
+                  | eval readable_time=strftime(_time,"%Y-%m-%d %H:%M:%S")
+                  | table readable_time, host, scan_type, score_pct | sort _time
+                  | rename readable_time as "Time", host as "Host", scan_type as "Scan Type", score_pct as "Score Percent"</query>
+          <earliest>-30d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>
