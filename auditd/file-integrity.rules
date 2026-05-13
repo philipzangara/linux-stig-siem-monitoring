@@ -1,0 +1,5 @@
+-w /etc/passwd -p wa -k file_integrity
+-w /etc/shadow -p wa -k file_integrity
+-w /etc/sudoers -p wa -k file_integrity
+-w /etc/ssh/sshd_config -p wa -k file_integrity
+-w /etc/cron.d -p wa -k file_integrity
