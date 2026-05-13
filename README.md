@@ -196,3 +196,7 @@ In Splunk web go to Dashboards, create a new Classic Dashboard, click Edit, then
 - Chrony
 - Ubuntu 24.04 LTS (Noble Numbat)
 - VMware Workstation
+
+## Notes
+
+This project was built hands-on in a personal lab environment. Claude (Anthropic) was used as a technical resource during development for troubleshooting, SPL query guidance, and documentation assistance. All configuration, implementation, and testing was performed manually.
